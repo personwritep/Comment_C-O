@@ -1,0 +1,182 @@
+// ==UserScript==
+// @name         Comment C-O
+// @namespace    http://tampermonkey.net/
+// @version      0.2
+// @description  コメント管理画面のリスト開閉機能
+// @author       Ameba Blog User
+// @match        https://blog.ameba.jp/ucs/comment/comment*
+// @noframes
+// @run-at        document-start
+// @grant        none
+// ==/UserScript==
+
+
+let ua=0;
+let agent=window.navigator.userAgent.toLowerCase();
+if(agent.indexOf('firefox') > -1){ ua=1; } // Firefoxの場合のフラッグ
+
+
+window.addEventListener('DOMContentLoaded', function(){
+
+    environ();
+    set_items();
+
+    function environ(){
+        let css=
+            '.userList__item { position: relative; } '+
+            '.userList__item:focus { outline: 2px solid #2196f3; } '+
+            '.userList__text { display: none; } '+
+            '.userList__information { top: 42px; right: 330px; } '+
+            '.userList__buttons { top: 38px; right: 76px; } '+
+            '.cc_view { width: 29px; height: 29px; margin-left: 16px; color: #888; '+
+            'font: 16px/28px Meiryo; text-indent: -1px; border: 1px solid #aaa; '+
+            'border-radius: 4px; background: #fff; cursor: pointer; } '+
+            '.item_close { position: absolute; margin: 0 !important; } '+
+            '.userList__tooltip { z-index: 1; }';
+
+        if(ua==1){
+            css +='.cc_view { font: 16px/29px Meiryo; text-indent: -3px; }'; }
+
+        let style=document.createElement('style');
+        style.setAttribute('id', 'cc_list');
+        style.innerHTML=css;
+
+        let target=document.querySelector('body');
+        if(!target.querySelector('#cc_list')){
+            target.appendChild(style); }}
+
+
+    function set_items(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            items[k].setAttribute('tabindex', '0');
+            let information=items[k].querySelector('.userList__information');
+            let buttons=items[k].querySelector('.userList__buttons');
+            set_view(buttons);
+            information.classList.add('item_close');
+            buttons.classList.add('item_close'); }
+
+        function set_view(elem){
+            let view=document.createElement('button');
+            view.setAttribute('type', 'button');
+            view.setAttribute('class', 'cc_view');
+            view.textContent='▼';
+            if(!elem.querySelector('.cc_view')){
+                elem.appendChild(view); }}}
+
+}); // window.addEventListener
+
+
+
+window.addEventListener('load', function(){
+
+    open_edit();
+    open_read();
+    close();
+    text_focus();
+    read_memo();
+    memo();
+
+
+    function open_edit(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_button=items[k].querySelector('.js-comment-reply-button');
+            if(reply_button){
+                reply_button.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='block';
+                    information.classList.remove('item_close');
+                    buttons.classList.remove('item_close');
+                    height_g(text);
+
+                    items[k].scrollIntoView({block: "center"});
+                    items[k].setAttribute('tabindex', ''); }); }}}
+
+
+    function open_read(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let view_button=items[k].querySelector('.cc_view');
+            if(view_button){
+                view_button.addEventListener('click', function(){
+                    toggle(items[k],view_button); }); }}
+
+        function toggle(item,sw){
+            let text=item.querySelector('.userList__text');
+            if(sw.textContent=='▼'){
+                text.style.display='block';
+                sw.textContent='▲';
+                height_g(text); }
+            else{
+                text.style.display='none';
+                sw.textContent='▼';
+                item.focus(); }}}
+
+
+    function height_g(elem){
+        let s_height=elem.scrollHeight;
+        if(s_height<300){
+            elem.style.height='auto'; }
+        else{
+            elem.style.height='300px'; }}
+
+
+    function close(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_cancel=items[k].querySelector('.js-comment-reply-cancel');
+            if(reply_cancel){
+                reply_cancel.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='none';
+                    information.classList.add('item_close');
+                    buttons.classList.add('item_close');
+                    let view_button=items[k].querySelector('.cc_view');
+                    if(view_button.textContent=='▲'){
+                        view_button.textContent='▼'; }
+
+                    items[k].setAttribute('tabindex', '0');
+                    items[k].focus(); }); }}}
+
+
+    function text_focus(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let text=items[k].querySelector('.userList__text');
+            let resizeObserver=new ResizeObserver(recover_scroll);
+            resizeObserver.observe(text);
+
+            function recover_scroll(){
+                let textarea=items[k].querySelector('.formGroup__textarea');
+                if(textarea){
+                    textarea.blur(); }}}}
+
+
+    function memo(){
+        let sendbutton=document.querySelectorAll('.commentList .sendButton');
+        for(let k=0; k<sendbutton.length; k++){
+            sendbutton[k].addEventListener('mousedown', function(){
+                let comm_id=sendbutton[k].getAttribute('data-comment-id');
+                document.cookie='comm_id='+comm_id + '; max-age=20'; }); }}
+
+
+    function read_memo(){
+        let cookie_=document.cookie.split('; ').find(row=>row.startsWith('comm_id'));
+        let comm_id;
+        if(cookie_){
+            comm_id=cookie_.split('=')[1]; }
+
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let sendbutton=items[k].querySelector('.commentList .sendButton');
+            if(sendbutton){
+                let id=sendbutton.getAttribute('data-comment-id');
+                if(id==comm_id){
+                    items[k].focus(); }}}}
+
+}); // window.addEventListener
