@@ -1,0 +1,316 @@
+// ==UserScript==
+// @name         Comment C-O
+// @namespace    http://tampermonkey.net/
+// @version      0.3
+// @description  コメント管理画面のリスト開閉機能
+// @author       Ameba Blog User
+// @match        https://blog.ameba.jp/ucs/comment/comment*
+// @noframes
+// @run-at        document-start
+// @grant        none
+// ==/UserScript==
+
+
+window.addEventListener('DOMContentLoaded', function(){
+
+    environ();
+    set_items();
+    list_mode();
+
+    function environ(){
+        let css=
+            '.userList__item { position: relative; } '+
+            '.userList__item:focus { outline: 2px solid #2196f3; } '+
+            '.userList__text { display: none; } '+
+            '.userList__information { top: 42px; right: 330px; } '+
+            '.userList__buttons { top: 38px; right: 76px; } '+
+            '.co_view { width: 29px; height: 29px; margin-left: 16px; color: #888; '+
+            'font: 16px/30px Meiryo; padding: 0; border: 1px solid #aaa; '+
+            'border-radius: 4px; background: #fff; cursor: pointer; } '+
+            '.item_close { position: absolute; margin: 0 !important; } '+
+            '.userList__tooltip { z-index: 1; }';
+
+        let style=document.createElement('style');
+        style.setAttribute('id', 'co_list');
+        style.innerHTML=css;
+
+        let target=document.querySelector('body');
+        if(!target.querySelector('#co_list')){
+            target.appendChild(style); }}
+
+
+    function set_items(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            items[k].setAttribute('tabindex', '0');
+            let information=items[k].querySelector('.userList__information');
+            let buttons=items[k].querySelector('.userList__buttons');
+            set_view(buttons);
+            information.classList.add('item_close');
+            buttons.classList.add('item_close'); }
+
+        function set_view(elem){
+            let view=document.createElement('button');
+            view.setAttribute('type', 'button');
+            view.setAttribute('class', 'co_view');
+            view.textContent='▼';
+            if(!elem.querySelector('.co_view')){
+                elem.appendChild(view); }}}
+
+
+    function list_mode(){
+        let tab_item=document.querySelectorAll('.tabs .tabs__item');
+
+        if(tab_item[0] && tab_item[0].classList.contains('is-active')){ // 公開済み画面
+            let cookie_a=document.cookie.split('; ').find(row=>row.startsWith('approved'));
+            let approved=0;
+            if(cookie_a){
+                approved=cookie_a.split('=')[1]; } // approved:1 コメント表示
+            if(approved==1){
+                let items=document.querySelectorAll('.userList__item');
+                for(let k=0; k<items.length; k++){
+                    let view_button=items[k].querySelector('.co_view');
+                    let text=items[k].querySelector('.userList__text');
+                    text.style.display='block';
+                    view_button.textContent='▲';
+                    height_g(text); }}
+            document.cookie='approved='+approved+'; Max-Age=2592000'; }
+
+
+        if(tab_item[1] && tab_item[1].classList.contains('is-active')){ // 承認待ち画面
+            let cookie_p=document.cookie.split('; ').find(row=>row.startsWith('pending'));
+            let pending=0;
+            if(cookie_p){
+                pending=cookie_p.split('=')[1]; } // pending:1 コメント表示
+            if(pending==1){
+                let items=document.querySelectorAll('.userList__item');
+                for(let k=0; k<items.length; k++){
+                    let view_button=items[k].querySelector('.co_view');
+                    let text=items[k].querySelector('.userList__text');
+                    text.style.display='block';
+                    view_button.textContent='▲';
+                    height_g(text); }}
+            document.cookie='pending='+pending+'; Max-Age=2592000'; }
+    } // list_mode()
+
+
+    function height_g(elem){
+        let s_height=elem.scrollHeight;
+        if(s_height<300){
+            elem.style.height='auto'; }
+        else{
+            elem.style.height='300px'; }}
+
+}); // window.addEventListener
+
+
+
+window.addEventListener('load', function(){
+
+    open_edit();
+    open_read();
+    close();
+    text_focus();
+    read_memo();
+    memo();
+
+
+    function open_edit(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_button=items[k].querySelector('.js-comment-reply-button');
+            if(reply_button){
+                reply_button.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='block';
+                    information.classList.remove('item_close');
+                    buttons.classList.remove('item_close');
+                    height_g(text);
+
+                    items[k].scrollIntoView({block: "center"});
+                    items[k].setAttribute('tabindex', ''); }); }}}
+
+
+    function open_read(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let view_button=items[k].querySelector('.co_view');
+            if(view_button){
+                view_button.addEventListener('click', function(){
+                    toggle(items[k],view_button); }); }}
+
+        function toggle(item,sw){
+            let text=item.querySelector('.userList__text');
+            if(sw.textContent=='▼'){
+                text.style.display='block';
+                sw.textContent='▲';
+                height_g(text); }
+            else{
+                text.style.display='none';
+                sw.textContent='▼';
+                item.focus(); }}}
+
+
+    function height_g(elem){
+        let s_height=elem.scrollHeight;
+        if(s_height<300){
+            elem.style.height='auto'; }
+        else{
+            elem.style.height='300px'; }}
+
+
+    function close(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_cancel=items[k].querySelector('.js-comment-reply-cancel');
+            if(reply_cancel){
+                reply_cancel.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='none';
+                    information.classList.add('item_close');
+                    buttons.classList.add('item_close');
+                    let view_button=items[k].querySelector('.co_view');
+                    if(view_button.textContent=='▲'){
+                        view_button.textContent='▼'; }
+
+                    items[k].setAttribute('tabindex', '0');
+                    items[k].focus(); }); }}}
+
+
+    function text_focus(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let text=items[k].querySelector('.userList__text');
+            let resizeObserver=new ResizeObserver(recover_scroll);
+            resizeObserver.observe(text);
+
+            function recover_scroll(){
+                let textarea=items[k].querySelector('.formGroup__textarea');
+                if(textarea){
+                    textarea.blur(); }}}}
+
+
+    function memo(){
+        let sendbutton=document.querySelectorAll('.commentList .sendButton');
+        for(let k=0; k<sendbutton.length; k++){
+            sendbutton[k].addEventListener('mousedown', function(){
+                let comm_id=sendbutton[k].getAttribute('data-comment-id');
+                document.cookie='comm_id='+comm_id + '; Max-Age=20'; }); }}
+
+
+    function read_memo(){
+        let cookie_c=document.cookie.split('; ').find(row=>row.startsWith('comm_id'));
+        let comm_id;
+        if(cookie_c){
+            comm_id=cookie_c.split('=')[1]; }
+
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let sendbutton=items[k].querySelector('.commentList .sendButton');
+            if(sendbutton){
+                let id=sendbutton.getAttribute('data-comment-id');
+                if(id==comm_id){
+                    items[k].focus(); }}}}
+
+}); // window.addEventListener
+
+
+
+window.addEventListener('load', function(){
+
+    let SettingsList=document.querySelector('.commentSettingsList');
+    if(SettingsList){
+
+        let list1=document.createElement('li');
+        list1.setAttribute('id', 'list1');
+        list1.classList.add('commentSettingsList__item');
+        list1.innerHTML=
+            '<div class="commentSettingsList__link" style="justify-content: normal">'+
+            '公開済みリスト 初期表示：　'+
+            '<input name="approved" type="radio" id="approved0">&#8196;コメント非表示　　'+
+            '<input name="approved" type="radio" id="approved1">&#8196;コメント表示</div>';
+
+        if(!SettingsList.querySelector('#list1')){
+            SettingsList.appendChild(list1); }
+
+        let list2=document.createElement('li');
+        list2.setAttribute('id', 'list2');
+        list2.classList.add('commentSettingsList__item');
+        list2.innerHTML=
+            '<div class="commentSettingsList__link"  style="justify-content: normal">'+
+            '承認待ちリスト 初期表示：　'+
+            '<input name="pending" type="radio" id="pending0">&#8196;コメント非表示　　'+
+            '<input name="pending" type="radio" id="pending1">&#8196;コメント表示</div>';
+
+        if(!SettingsList.querySelector('#list2')){
+            SettingsList.appendChild(list2); }
+
+
+        set_radio();
+
+        function set_radio(){
+            let cookie_a=document.cookie.split('; ').find(row=>row.startsWith('approved'));
+            let approved=0;
+            if(cookie_a){
+                approved=cookie_a.split('=')[1]; } // approved:0:コメント非表示　1:表示
+            let approved_radio0=document.querySelector('#approved0');
+            let approved_radio1=document.querySelector('#approved1');
+            if(approved==0){
+                approved_radio0.checked=true;
+                approved_radio1.checked=false; }
+            else{
+                approved_radio0.checked=false;
+                approved_radio1.checked=true; }
+            document.cookie='approved='+approved+'; Max-Age=2592000';
+
+            let cookie_p=document.cookie.split('; ').find(row=>row.startsWith('pending'));
+            let pending=0;
+            if(cookie_p){
+                pending=cookie_p.split('=')[1]; } // pending:0コメント非表示　1:表示
+            let pending_radio0=document.querySelector('#pending0');
+            let pending_radio1=document.querySelector('#pending1');
+            if(pending==0){
+                pending_radio0.checked=true;
+                pending_radio1.checked=false; }
+            else{
+                pending_radio0.checked=false;
+                pending_radio1.checked=true; }
+            document.cookie='pending='+pending+'; Max-Age=2592000'; }
+
+
+        radio_select();
+
+        function radio_select(){
+            let approved_radio0=document.querySelector('#approved0');
+            approved_radio0.onchange=function(){
+                if(approved_radio0.checked==true){
+                    document.cookie='approved=0; Max-Age=2592000'; }
+                else{
+                    document.cookie='approved=1; Max-Age=2592000'; }}
+
+            let approved_radio1=document.querySelector('#approved1');
+            approved_radio1.onchange=function(){
+                if(approved_radio1.checked==true){
+                    document.cookie='approved=1; Max-Age=2592000'; }
+                else{
+                    document.cookie='approved=0; Max-Age=2592000'; }}
+
+            let pending_radio0=document.querySelector('#pending0');
+            pending_radio0.onchange=function(){
+                if(pending_radio0.checked==true){
+                    document.cookie='pending=0; Max-Age=2592000'; }
+                else{
+                    document.cookie='pending=1; Max-Age=2592000'; }}
+
+            let pending_radio1=document.querySelector('#pending1');
+            pending_radio1.onchange=function(){
+                if(pending_radio1.checked==true){
+                    document.cookie='pending=1; Max-Age=2592000'; }
+                else{
+                    document.cookie='pending=0; Max-Age=2592000'; }}}
+
+    }}); // window.addEventListener
