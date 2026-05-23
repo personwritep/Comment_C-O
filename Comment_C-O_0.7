@@ -1,0 +1,466 @@
+// ==UserScript==
+// @name         Comment C-O
+// @namespace    http://tampermonkey.net/
+// @version      0.7
+// @description  コメント管理画面のリスト開閉機能
+// @author       Ameba Blog User
+// @match        https://blog.ameba.jp/ucs/comment/comment*
+// @noframes
+// @run-at        document-start
+// @grant        none
+// ==/UserScript==
+
+let save_t;
+let mode_key;
+
+window.addEventListener('DOMContentLoaded', function(){
+    environ();
+    set_items();
+    list_mode();
+    save_set();
+
+    function environ(){
+        let css=
+            '.userList__item { position: relative; } '+
+            '.userList__item:focus { outline: 2px solid #2196f3; } '+
+            '.userList__text { display: none; } '+
+            '.userList__information { top: 42px; right: 330px; } '+
+            '.userList__buttons { top: 38px; right: 76px; } '+
+            '.co_view { width: 29px; height: 29px; margin-left: 16px; color: #888; '+
+            'font: 16px/30px Meiryo; padding: 0; border: 1px solid #aaa; '+
+            'border-radius: 4px; background: #fff; cursor: pointer; } '+
+            '.co_menu { '+
+            'background: linear-gradient(#26c6da 0%, #009688 70%) !important; } '+
+            '.co_menu:hover { '+
+            'background: linear-gradient(#009688 0%, #26c6da 100%) !important; } '+
+            '.co_menu svg { fill: #fff; } '+
+            '.item_close { position: absolute; margin: 0 !important; } '+
+            '.userList__tooltip { z-index: 1; }';
+
+        let style=document.createElement('style');
+        style.setAttribute('id', 'co_list');
+        style.innerHTML=css;
+
+        let target=document.querySelector('body');
+        if(!target.querySelector('#co_list')){
+            target.appendChild(style); }}
+
+
+    function set_items(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            items[k].setAttribute('tabindex', '0');
+            let information=items[k].querySelector('.userList__information');
+            let buttons=items[k].querySelector('.userList__buttons');
+            set_view(buttons);
+            information.classList.add('item_close');
+            buttons.classList.add('item_close'); }
+
+        function set_view(elem){
+            let view=document.createElement('button');
+            view.setAttribute('type', 'button');
+            view.setAttribute('class', 'co_view');
+            view.textContent='▼';
+            if(!elem.querySelector('.co_view')){
+                elem.appendChild(view); }}}
+
+
+    function list_mode(){
+        let tab_item=document.querySelectorAll('.tabs .tabs__item');
+        if(tab_item[0] && tab_item[0].classList.contains('is-active')){ // 公開済み画面
+            let approved=get_cookie('approved');
+
+            if(approved!=0){ // approved:　1:制限表示　2:全文表示
+                let items=document.querySelectorAll('.userList__item');
+                for(let k=0; k<items.length; k++){
+                    let view_button=items[k].querySelector('.co_view');
+                    let text=items[k].querySelector('.userList__text');
+                    text.style.display='block';
+                    height_g(text, approved);
+                    view_button.textContent='▲'; }}
+            document.cookie='approved='+approved+'; Max-Age=2592000'; }
+
+
+        if(tab_item[1] && tab_item[1].classList.contains('is-active')){ // 承認待ち画面
+            let pending=get_cookie('pending');
+            if(pending!=0){ // pending:　1:制限表示　2:全文表示
+                let items=document.querySelectorAll('.userList__item');
+                for(let k=0; k<items.length; k++){
+                    let view_button=items[k].querySelector('.co_view');
+                    let text=items[k].querySelector('.userList__text');
+                    text.style.display='block';
+                    height_g(text, pending);
+                    view_button.textContent='▲'; }}
+            document.cookie='pending='+pending+'; Max-Age=2592000';
+
+            let items=document.querySelectorAll('.userList__item');
+            for(let k=0; k<items.length; k++){
+                let menu_button=items[k].querySelector('.userList__menu');
+                menu_button.classList.add('co_menu'); }}
+    } // list_mode()
+
+
+    function save_set(){ // 緑マークの保持時間・動作modeなどはここで設定 🟩
+        let save=get_cookie('save_time');
+        if(save==0){
+            save_t=3600; }
+        else if(save==1){
+            save_t=21600; }
+        else if(save==2){
+            save_t=0; }
+        document.cookie='save_time='+save+'; Max-Age=2592000';
+
+        mode_key=get_cookie('mode_key'); }
+
+}); // window.addEventListener
+
+
+
+window.addEventListener('load', function(){
+    open_edit();
+    open_read();
+    close();
+    text_focus();
+    menu_read();
+    read_memo();
+    read_memo_app();
+    memo();
+    memo_app();
+
+
+    function open_edit(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_button=items[k].querySelector('.js-comment-reply-button');
+            if(reply_button){
+                reply_button.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+
+                    text.style.display='block';
+                    information.classList.remove('item_close');
+                    buttons.classList.remove('item_close');
+                    height_g(text, 1);
+                    app_reset(items[k], 0); // 🟩
+
+                    items[k].scrollIntoView({block: "center"});
+                    items[k].setAttribute('tabindex', ''); }); }}}
+
+
+    function open_read(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let view_button=items[k].querySelector('.co_view');
+            if(view_button){
+                view_button.addEventListener('click', function(){
+                    toggle(items[k], view_button);
+                    app_reset(items[k], 0); }); }} // 🟩
+
+        function toggle(item, sw){
+            let open_limit;
+            let tab_item=document.querySelectorAll('.tabs .tabs__item');
+            if(tab_item[0] && tab_item[0].classList.contains('is-active')){ // 公開済み画面
+                open_limit=get_cookie('approved'); }
+            else if(tab_item[1] && tab_item[1].classList.contains('is-active')){ // 承認待ち画面
+                open_limit=get_cookie('pending'); }
+
+            let text=item.querySelector('.userList__text');
+            if(sw.textContent=='▼'){
+                text.style.display='block';
+                sw.textContent='▲';
+                height_g(text, open_limit); }
+            else{
+                text.style.display='none';
+                sw.textContent='▼';
+                item.focus(); }}}
+
+
+    function menu_read(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let menu_button=items[k].querySelector('.userList__menu');
+            menu_button.addEventListener('click', function(event){
+                if(event.ctrlKey){
+                    menu_button.click();
+                    app_reset(items[k], 1); }
+                else{
+                    app_reset(items[k], 0); }}); }} // 🟩
+
+
+    function close(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_cancel=items[k].querySelector('.js-comment-reply-cancel');
+            if(reply_cancel){
+                reply_cancel.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='none';
+                    information.classList.add('item_close');
+                    buttons.classList.add('item_close');
+                    let view_button=items[k].querySelector('.co_view');
+                    if(view_button.textContent=='▲'){
+                        view_button.textContent='▼'; }
+                    items[k].setAttribute('tabindex', '0');
+                    items[k].focus(); }); }}}
+
+
+    function text_focus(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let text=items[k].querySelector('.userList__text');
+            let resizeObserver=new ResizeObserver(recover_scroll);
+            resizeObserver.observe(text);
+
+            function recover_scroll(){
+                let textarea=items[k].querySelector('.formGroup__textarea');
+                if(textarea){
+                    textarea.blur(); }}}}
+
+
+    function memo(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let sendbutton=items[k].querySelector('.commentList .sendButton');
+            if(sendbutton){
+                sendbutton.addEventListener('mousedown', function(){
+                    let comm_id=sendbutton.getAttribute('data-comment-id');
+                    document.cookie='comm_id='+comm_id+'; Max-Age=20';
+                    app_reset(items[k], 1); }); }}} // 🟩
+
+
+    function read_memo(){
+        let comm_id=get_cookie('comm_id');
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let sendbutton=items[k].querySelector('.commentList .sendButton');
+            if(sendbutton){
+                let id=sendbutton.getAttribute('data-comment-id');
+                if(id==comm_id){
+                    items[k].focus(); }}}}
+
+
+    function memo_app(){
+        let app_button=document.querySelectorAll('[data-section-id="comment_approve"]');
+        for(let k=0; k<app_button.length; k++){
+            app_button[k].addEventListener('mousedown', function(){
+                let comm_id=app_button[k].getAttribute('data-comment-id');
+                let approve_id=get_cookie('new_comm_id');
+                cookie_write(approve_id, comm_id); }); }
+
+        function cookie_write(value0, value1){
+            if(value0==0){
+                document.cookie='new_comm_id='+value1+'; Max-Age='+save_t; }
+            else{
+                let arr=value0.split('%');
+                arr.push(value1);
+                let approve_id_n=arr.join('%');
+                document.cookie=
+                    'new_comm_id='+approve_id_n+'; Max-Age='+save_t; }}}
+
+
+    function read_memo_app(){
+        let approve_id=get_cookie('new_comm_id');
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let sendbutton=items[k].querySelector('.commentList .sendButton');
+            if(sendbutton && approve_id!=0){
+                let id=sendbutton.getAttribute('data-comment-id');
+                if(approve_id.indexOf(id)!=-1){
+                    let view_button=items[k].querySelector('.userList__menu');
+                    view_button.classList.add('co_menu'); }}}}
+
+
+    function app_reset(item, mode){ // 🟩
+        if(mode==mode_key){
+            let approve_id=get_cookie('new_comm_id');
+            let menu_button=item.querySelector('.userList__menu');
+            let sendbutton=item.querySelector('.commentList .sendButton');
+            if(sendbutton && approve_id!=0){
+                menu_button.classList.remove('co_menu');
+                let id=sendbutton.getAttribute('data-comment-id');
+                let arr=approve_id.split('%');
+                let arr_d=arr.filter(function(value){
+                    return value!=id; });
+                let approve_id_d=arr_d.join('%');
+                document.cookie='new_comm_id='+approve_id_d+'; Max-Age='+save_t; }}}
+
+}); // window.addEventListener
+
+
+
+function height_g(elem, limit){
+    let s_height=elem.scrollHeight;
+    if(s_height<300){
+        elem.style.height='auto'; }
+    else{
+        if(limit!=2){
+            elem.style.height='300px'; }
+        else if(limit==2){
+            elem.style.height='auto'; }}}
+
+
+function get_cookie(name){
+    let cookie_req=document.cookie.split('; ').find(row=>row.startsWith(name));
+    if(cookie_req){
+        if(cookie_req.split('=')[1]==null){
+            return 0; }
+        else{
+            return cookie_req.split('=')[1]; }}
+    if(!cookie_req){
+        return 0; }}
+
+
+
+window.addEventListener('load', function(){
+
+    let SettingsList=document.querySelector('.commentSettingsList');
+    if(SettingsList){ // コメント設定メニューの画面でのみ動作
+
+        let list1=document.createElement('li');
+        list1.setAttribute('id', 'list1');
+        list1.classList.add('commentSettingsList__item');
+        list1.innerHTML=
+            '<div class="commentSettingsList__link" style="justify-content: normal">'+
+            '公開済みリスト 初期表示のコメント内容：　'+
+            '<input name="approved" type="radio" id="approved0">&#8196;非表示　　'+
+            '<input name="approved" type="radio" id="approved1">&#8196;制限表示　　'+
+            '<input name="approved" type="radio" id="approved2">&#8196;全文表示</div>';
+        if(!SettingsList.querySelector('#list1')){
+            SettingsList.appendChild(list1); }
+
+        let list2=document.createElement('li');
+        list2.setAttribute('id', 'list2');
+        list2.classList.add('commentSettingsList__item');
+        list2.innerHTML=
+            '<div class="commentSettingsList__link"  style="justify-content: normal">'+
+            '承認待ちリスト 初期表示のコメント内容：　'+
+            '<input name="pending" type="radio" id="pending0">&#8196;非表示　　'+
+            '<input name="pending" type="radio" id="pending1">&#8196;制限表示　　'+
+            '<input name="pending" type="radio" id="pending2">&#8196;全文表示</div>';
+        if(!SettingsList.querySelector('#list2')){
+            SettingsList.appendChild(list2); }
+
+        let list3=document.createElement('li');
+        list3.setAttribute('id', 'list3');
+        list3.classList.add('commentSettingsList__item');
+        list3.innerHTML=
+            '<div class="commentSettingsList__link"  style="justify-content: normal">'+
+            '承認したコメントの緑マーク　保持時間：　'+
+            '<input name="save" type="radio" id="save0">&#8196;1時間　　'+
+            '<input name="save" type="radio" id="save1">&#8196;6時間　　'+
+            '<input name="save" type="radio" id="save2">&#8196;マーク非表示</div>';
+        if(!SettingsList.querySelector('#list3')){
+            SettingsList.appendChild(list3); }
+
+        let list4=document.createElement('li');
+        list4.setAttribute('id', 'list4');
+        list4.classList.add('commentSettingsList__item');
+        list4.innerHTML=
+            '<div class="commentSettingsList__link"  style="justify-content: normal">'+
+            '承認したコメントの緑マーク　リセット仕様：　'+
+            '<input name="mode" type="radio" id="mode0">&#8196;コメント参照時　　'+
+            '<input name="mode" type="radio" id="mode1">&#8196;返信の送信時</div>';
+        if(!SettingsList.querySelector('#list4')){
+            SettingsList.appendChild(list4); }
+
+
+        set_radio();
+
+        function set_radio(){
+            let approved=get_cookie('approved');
+            let approved0=document.querySelector('#approved0');
+            let approved1=document.querySelector('#approved1');
+            let approved2=document.querySelector('#approved2');
+            if(approved==0){ // approved:　0:コメント非表示　1:制限表示　2:全文表示
+                approved0.checked=true; }
+            else if(approved==1){
+                approved1.checked=true; }
+            else if(approved==2){
+                approved2.checked=true; }
+            document.cookie='approved='+approved+'; Max-Age=2592000';
+
+            let pending=get_cookie('pending');
+            let pending0=document.querySelector('#pending0');
+            let pending1=document.querySelector('#pending1');
+            let pending2=document.querySelector('#pending2');
+            if(pending==0){ // pending:　0:コメント非表示　1:制限表示　2:全文表示
+                pending0.checked=true; }
+            else if(pending==1){
+                pending1.checked=true; }
+            else if(pending==2){
+                pending2.checked=true; }
+            document.cookie='pending='+pending+'; Max-Age=2592000';
+
+            let save=get_cookie('save_time'); // save:　0:1時間　1:6時間　2:マーク非表示
+            let save0=document.querySelector('#save0');
+            let save1=document.querySelector('#save1');
+            let save2=document.querySelector('#save2');
+            if(save==0){
+                save0.checked=true; }
+            else if(save==1){
+                save1.checked=true; }
+            else if(save==2){
+                save2.checked=true; }
+            document.cookie='save_time='+save+'; Max-Age=2592000';
+
+            let mode=get_cookie('mode_key'); // mode:　0:コメント参照時　1:返信の送信時
+            let mode0=document.querySelector('#mode0');
+            let mode1=document.querySelector('#mode1');
+            if(mode==0){
+                mode0.checked=true; }
+            else if(mode==1){
+                mode1.checked=true; }
+            document.cookie='mode_key='+mode+'; Max-Age=2592000'; }
+
+
+        radio_select();
+
+        function radio_select(){
+            let approved0=document.querySelector('#approved0');
+            approved0.onchange=function(){
+                document.cookie='approved=0; Max-Age=2592000'; }
+
+            let approved1=document.querySelector('#approved1');
+            approved1.onchange=function(){
+                document.cookie='approved=1; Max-Age=2592000'; }
+
+            let approved2=document.querySelector('#approved2');
+            approved2.onchange=function(){
+                document.cookie='approved=2; Max-Age=2592000'; }
+
+            let pending0=document.querySelector('#pending0');
+            pending0.onchange=function(){
+                document.cookie='pending=0; Max-Age=2592000'; }
+
+            let pending1=document.querySelector('#pending1');
+            pending1.onchange=function(){
+                document.cookie='pending=1; Max-Age=2592000'; }
+
+            let pending2=document.querySelector('#pending2');
+            pending2.onchange=function(){
+                document.cookie='pending=2; Max-Age=2592000'; }
+
+            let save0=document.querySelector('#save0');
+            save0.onchange=function(){
+                document.cookie='save_time=0; Max-Age=2592000'; }
+
+            let save1=document.querySelector('#save1');
+            save1.onchange=function(){
+                document.cookie='save_time=1; Max-Age=2592000'; }
+
+            let save2=document.querySelector('#save2');
+            save2.onchange=function(){
+                document.cookie='save_time=2; Max-Age=2592000'; }
+
+            let mode0=document.querySelector('#mode0');
+            mode0.onchange=function(){
+                document.cookie='mode_key=0; Max-Age=2592000'; }
+
+            let mode1=document.querySelector('#mode1');
+            mode1.onchange=function(){
+                document.cookie='mode_key=1; Max-Age=2592000'; }}
+
+    }}); // window.addEventListener
