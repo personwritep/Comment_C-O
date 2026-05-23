@@ -1,0 +1,99 @@
+// ==UserScript==
+// @name         Comment C-O
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  コメント管理画面のリスト開閉機能
+// @author       Ameba Blog User
+// @match        https://blog.ameba.jp/ucs/comment/comment*
+// @noframes
+// @run-at        document-start
+// @grant        none
+// ==/UserScript==
+
+
+window.addEventListener('DOMContentLoaded', function(){
+
+    environ();
+
+    function environ(){
+        let css=
+            '.userList__item { position: relative; } '+
+            '.userList__item:focus { outline: 2px solid #2196f3; } '+
+            '.userList__text { display: none; } '+
+            '.userList__information { top: 42px; right: 330px; } '+
+            '.userList__buttons { top: 38px; right: 80px; } '+
+            '.item_close { position: absolute; margin: 0 !important; } '+
+            '.userList__tooltip { z-index: 1; }';
+
+        let style=document.createElement('style');
+        style.setAttribute('id', 'cc_list');
+        style.innerHTML=css;
+
+        let target=document.querySelector('body');
+        if(!target.querySelector('#cc_list')){
+            target.appendChild(style); }
+    } // disp_environ()
+
+
+
+    set_items();
+
+    function set_items(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            items[k].setAttribute('tabindex', '0');
+            let information=items[k].querySelector('.userList__information');
+            let buttons=items[k].querySelector('.userList__buttons');
+            information.classList.add('item_close');
+            buttons.classList.add('item_close'); }}
+
+
+
+    open();
+
+    function open(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_button=items[k].querySelector('.js-comment-reply-button');
+            if(reply_button){
+                reply_button.addEventListener('click', function(){
+                    let text=items[k].querySelector('.userList__text');
+                    let information=items[k].querySelector('.userList__information');
+                    let buttons=items[k].querySelector('.userList__buttons');
+                    text.style.display='block';
+                    information.classList.remove('item_close');
+                    buttons.classList.remove('item_close');
+
+                    height_g(text);
+
+                    items[k].scrollIntoView({block: "center"});
+                    items[k].setAttribute('tabindex', '');
+                }); }}}
+
+    function height_g(elem){
+        let s_height=elem.scrollHeight;
+        if(s_height<300){
+            elem.style.height='auto'; }
+        else{
+            elem.style.height='300px'; }}
+
+
+
+    close();
+
+    function close(){
+        let items=document.querySelectorAll('.userList__item');
+        for(let k=0; k<items.length; k++){
+            let reply_cancel=items[k].querySelector('.js-comment-reply-cancel');
+            reply_cancel.addEventListener('click', function(){
+                let text=items[k].querySelector('.userList__text');
+                let information=items[k].querySelector('.userList__information');
+                let buttons=items[k].querySelector('.userList__buttons');
+                text.style.display='none';
+                information.classList.add('item_close');
+                buttons.classList.add('item_close');
+
+                items[k].setAttribute('tabindex', '0');
+                items[k].focus(); }); }}
+
+}); // window.addEventListener
